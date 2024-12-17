@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify 人気曲ランキング API取得版</title>
+    <style>
+        /* 全体の背景色とフォント設定 */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* ヘッダーのスタイル */
+        h1 {
+            background-color: #1DB954;
+            color: white;
+            text-align: center;
+            padding: 20px 0;
+            margin: 0;
+            font-size: 2.5rem;
+        }
+
+        /* 検索バーのスタイル */
+        #search-bar {
+            text-align: center;
+            margin: 20px;
+        }
+
+        #search-bar input {
+            padding: 10px;
+            width: 60%;
+            font-size: 1rem;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        /* 結果表示エリアのスタイル */
+        #results {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 20px auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-gap: 20px;
+        }
+
+        /* 各アルバムのスタイル */
+        .album {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        /* 上位3位のアルバムのスタイル */
+        .top-three {
+            font-size: 1.75rem;
+            transform: scale(1.1);
+        }
+
+        /* 3位以外のアルバムのスタイル（さらに小さく） */
+        .not-top-three {
+            font-size: 0.85rem; /* 小さくする */
+            transform: scale(0.9); /* 少し縮小する */
+        }
+
+        .album:hover {
+            transform: scale(1.05);
+        }
+
+        /* アルバム名とアーティストのスタイル */
+        .album h2 {
+            font-size: 1.5rem;
+            margin: 10px 0;
+            color: #1DB954;
+        }
+
+        .album p {
+            font-size: 1rem;
+            margin: 5px 0;
+            color: #555;
+        }
+
+        /* 画像のスタイル */
+        .album img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        /* Spotifyリンクのスタイル */
+        .album a {
+            background-color: #1DB954;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            transition: background-color 0.3s ease;
+        }
+
+        .album a:hover {
+            background-color: #1ed760;
+        }
+
+        /* レスポンシブデザイン（小さい画面に対応） */
+        @media (max-width: 768px) {
+            #results {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #results {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .album h2 {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Spotify 人気曲ランキング API取得版</h1>
+
+    <!-- 検索バー -->
+    <div id="search-bar">
+        <input type="text" id="search-input" placeholder="アーティスト名またはアルバム名で検索" oninput="searchAlbums()">
+    </div>
+
+    <div id="results"></div> <!-- 結果を表示するエリア -->
+
+    <script>
+        const CLIENT_ID = '44804e8c83cd46ef96bcd21b70c85b2a';
+        const CLIENT_SECRET = '84c1548936374d7eb6697167aa381e54';
+
+        let albumsData = []; // 全アルバムデータ
+
+        // アクセストークンを取得する関数
+        async function getAccessToken() {
+            const response = await fetch('https://accounts.spotify.com/api/token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Authorization': `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`
+                },
+                body: 'grant_type=client_credentials'
+            });
+
+            if (!response.ok) {
+                throw new Error(`トークン取得エラー: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return data.access_token;
+        }
+
+        // 最新人気曲を取得して表示する関数
+        async function getTopTracks() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>読み込み中...</p>'; // ローディングメッセージ
+
+            try {
+                const access_token = await getAccessToken();
+
+                // プレイリスト取得
+                const response = await fetch('https://api.spotify.com/v1/browse/new-releases?country=JP&limit=50', {
+                    headers: {
+                        'Authorization': `Bearer ${access_token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`プレイリスト取得エラー: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                if (data.albums && data.albums.items && data.albums.items.length > 0) {
+                    albumsData = data.albums.items; // アルバムデータを格納
+                    displayAlbums(albumsData);
+                } else {
+                    resultsDiv.innerHTML = '<p>プレイリストが見つかりませんでした。</p>';
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<p>エラーが発生しました: ${error.message}</p>`;
+            }
+        }
+
+        // アルバムを表示する関数
+        function displayAlbums(albums) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = ''; // 現在の表示をクリア
+
+            albums.forEach((album, index) => {
+                const topClass = index < 3 ? 'top-three' : 'not-top-three';
+                const trackInfo = `
+                    <div class="album ${topClass}">
+                        <h2>${index + 1}. ${album.name}</h2>
+                        <p><strong>アーティスト:</strong> ${album.artists.map(artist => artist.name).join(', ')}</p>
+                        <p><strong>リリース日:</strong> ${album.release_date}</p>
+                        <p><img src="${album.images[0].url}" alt="${album.name}"></p>
+                        <a href="${album.external_urls.spotify}" target="_blank">Spotifyで聴く</a>
+                    </div>
+                `;
+                resultsDiv.innerHTML += trackInfo;
+            });
+        }
+
+        // 検索機能
+        function searchAlbums() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+
+            // 検索結果に基づいてアルバムをフィルタリング
+            const filteredAlbums = albumsData.filter(album => 
+                album.name.toLowerCase().includes(query) ||
+                album.artists.some(artist => artist.name.toLowerCase().includes(query))
+            );
+
+            displayAlbums(filteredAlbums); // フィルタリングしたアルバムを表示
+        }
+
+        // ページを開いたときにランキングを表示
+        getTopTracks();
+    </script>
+</body>
+</html>
